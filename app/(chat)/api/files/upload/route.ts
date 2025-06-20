@@ -1,8 +1,19 @@
-import { put } from '@vercel/blob';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { auth } from '@/app/(auth)/auth';
+
+// Initialize S3 client
+// Ensure AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and S3_BUCKET_NAME are in your .env
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
+});
+const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME!;
 
 // Use Blob instead of File since File is not available in Node.js environment
 const FileSchema = z.object({
@@ -51,12 +62,34 @@ export async function POST(request: Request) {
     const fileBuffer = await file.arrayBuffer();
 
     try {
-      const data = await put(`${filename}`, fileBuffer, {
-        access: 'public',
-      });
+      // Ensure environment variables for S3 are loaded and available
+      if (!process.env.AWS_REGION || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !S3_BUCKET_NAME) {
+        console.error('S3 configuration missing in environment variables.');
+        return NextResponse.json({ error: 'Server configuration error for file uploads.' }, { status: 500 });
+      }
 
-      return NextResponse.json(data);
+      const putObjectParams = {
+        Bucket: S3_BUCKET_NAME,
+        Key: `uploads/${filename}`, // Added 'uploads/' prefix for organization
+        Body: Buffer.from(fileBuffer), // Convert ArrayBuffer to Buffer
+        ContentType: file.type,
+        ACL: 'public-read' as const, // As const for ACL type safety
+      };
+
+      await s3Client.send(new PutObjectCommand(putObjectParams));
+
+      // Construct the public URL
+      const fileUrl = `https://${S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/uploads/${encodeURIComponent(filename)}`;
+
+      // Mimic Vercel Blob's response structure
+      return NextResponse.json({
+        url: fileUrl,
+        pathname: `uploads/${filename}`, // Reflect the key used in S3
+        contentType: file.type,
+        contentDisposition: `inline; filename="${filename}"`
+      });
     } catch (error) {
+      console.error('S3 Upload failed:', error);
       return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
     }
   } catch (error) {

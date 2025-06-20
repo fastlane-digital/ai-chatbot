@@ -1,19 +1,31 @@
 import { config } from 'dotenv';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import { migrate } from 'drizzle-orm/postgres-js/migrator';
-import postgres from 'postgres';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { Pool } from 'pg';
 
 config({
   path: '.env.local',
 });
 
 const runMigrate = async () => {
-  if (!process.env.POSTGRES_URL) {
-    throw new Error('POSTGRES_URL is not defined');
+  const requiredEnvVars = ['PGHOST', 'PGUSER', 'PGPASSWORD', 'PGDATABASE', 'PGPORT'];
+  for (const envVar of requiredEnvVars) {
+    if (!process.env[envVar]) {
+      throw new Error(`Environment variable ${envVar} is not defined`);
+    }
   }
 
-  const connection = postgres(process.env.POSTGRES_URL, { max: 1 });
-  const db = drizzle(connection);
+  const pool = new Pool({
+    host: process.env.PGHOST,
+    port: parseInt(process.env.PGPORT!, 10),
+    user: process.env.PGUSER,
+    password: process.env.PGPASSWORD,
+    database: process.env.PGDATABASE,
+    max: 1, // Recommended for migrations
+    ssl: process.env.DB_SSL_REQUIRED === 'true' ? { rejectUnauthorized: false } : undefined,
+  });
+
+  const db = drizzle(pool);
 
   console.log('⏳ Running migrations...');
 

@@ -21,7 +21,7 @@ import { generateTitleFromUserMessage } from '../../actions';
 import { myProvider } from '@/lib/ai/providers';
 import { entitlementsByUserType } from '@/lib/ai/entitlements';
 import { postRequestBodySchema, type PostRequestBody } from './schema';
-import { geolocation } from '@vercel/functions';
+// import { geolocation } from '@vercel/functions'; // Removed
 // import {
 //   createResumableStreamContext, // Removed
 //   type ResumableStreamContext,  // Removed
@@ -150,14 +150,27 @@ export async function POST(request: Request) {
       currentMessageContent = "Could not parse user message content.";
     }
 
+    let clientIp: string | undefined = undefined;
+    const xForwardedFor = request.headers.get('x-forwarded-for');
+    if (xForwardedFor) {
+      clientIp = xForwardedFor.split(',')[0].trim();
+    } else {
+      clientIp = request.headers.get('x-real-ip')?.trim();
+    }
+    // In Next.js Edge runtime, you might also use request.ip if available
+    // if ((request as any).ip) {
+    //   clientIp = (request as any).ip;
+    // }
 
-    const { longitude, latitude, city, country } = geolocation(request);
-
+    // RequestHints type definition (expected in lib/ai/prompts.ts)
+    // will likely need to be updated to remove longitude, latitude, city, country
+    // and potentially add clientIp: string | undefined.
     const requestHints: RequestHints = {
-      longitude,
-      latitude,
-      city,
-      country,
+      // longitude: undefined, // Removed
+      // latitude: undefined,  // Removed
+      // city: undefined,      // Removed
+      // country: undefined,   // Removed
+      clientIp: clientIp,
     };
 
     await saveMessages({

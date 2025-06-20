@@ -12,8 +12,8 @@ import {
   lt,
   type SQL,
 } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 
 import {
   user,
@@ -38,9 +38,16 @@ import { ChatSDKError } from '../errors';
 // use the Drizzle adapter for Auth.js / NextAuth
 // https://authjs.dev/reference/adapter/drizzle
 
-// biome-ignore lint: Forbidden non-null assertion.
-const client = postgres(process.env.POSTGRES_URL!);
-const db = drizzle(client);
+const pool = new Pool({
+  host: process.env.PGHOST,
+  port: process.env.PGPORT ? parseInt(process.env.PGPORT, 10) : 5432, // Default to 5432 if undefined
+  user: process.env.PGUSER,
+  password: process.env.PGPASSWORD,
+  database: process.env.PGDATABASE,
+  ssl: process.env.DB_SSL_REQUIRED === 'true' ? { rejectUnauthorized: false } : undefined, // Simplified SSL based on another common env var pattern
+});
+
+const db = drizzle(pool);
 
 export async function getUser(email: string): Promise<Array<User>> {
   try {

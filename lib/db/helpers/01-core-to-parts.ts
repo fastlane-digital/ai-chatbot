@@ -1,5 +1,5 @@
 import { config } from 'dotenv';
-import postgres from 'postgres';
+import { Pool } from 'pg'; // Changed from postgres
 import {
   chat,
   message,
@@ -8,7 +8,7 @@ import {
   vote,
   voteDeprecated,
 } from '../schema';
-import { drizzle } from 'drizzle-orm/postgres-js';
+import { drizzle } from 'drizzle-orm/node-postgres'; // Changed from postgres-js
 import { inArray } from 'drizzle-orm';
 import { appendResponseMessages, type UIMessage } from 'ai';
 
@@ -16,12 +16,22 @@ config({
   path: '.env.local',
 });
 
-if (!process.env.POSTGRES_URL) {
-  throw new Error('POSTGRES_URL environment variable is not set');
+const requiredEnvVarsHelper = ['PGHOST', 'PGUSER', 'PGPASSWORD', 'PGDATABASE', 'PGPORT'];
+for (const envVar of requiredEnvVarsHelper) {
+  if (!process.env[envVar]) {
+    throw new Error(`Helper script: Environment variable ${envVar} is not set`);
+  }
 }
 
-const client = postgres(process.env.POSTGRES_URL);
-const db = drizzle(client);
+const helperPool = new Pool({ // Changed from postgres client
+  host: process.env.PGHOST,
+  port: parseInt(process.env.PGPORT!, 10),
+  user: process.env.PGUSER,
+  password: process.env.PGPASSWORD,
+  database: process.env.PGDATABASE,
+  ssl: process.env.DB_SSL_REQUIRED === 'true' ? { rejectUnauthorized: false } : undefined,
+});
+const db = drizzle(helperPool); // drizzle now uses the pg Pool
 
 const BATCH_SIZE = 100; // Process 100 chats at a time
 const INSERT_BATCH_SIZE = 1000; // Insert 1000 messages at a time
